@@ -1,59 +1,91 @@
-// This is a template for a Node.js scraper on morph.io (https://morph.io)
+let axios = require('axios');
+let cheerio = require('cheerio');
+let tress = require('tress');
+let resolve = require('url').resolve;
+let fs = require('fs')
+let json2csv = require('json2csv');
+let sqlite3 = require("sqlite3").verbose();
 
-var cheerio = require("cheerio");
-var request = require("request");
-var sqlite3 = require("sqlite3").verbose();
+let URL = 'http://www.biznesfinder.pl/';
 
-function initDatabase(callback) {
-	// Set up sqlite database.
-	var db = new sqlite3.Database("data.sqlite");
-	db.serialize(function() {
-		db.run("CREATE TABLE IF NOT EXISTS data (name TEXT)");
-		callback(db);
-	});
+let results = [];
+let pages = links = 0;
+let start, end;
+
+let q = tress(crawl, 10);
+
+q.retry = function () {
+	let time = 60000;
+	q.pause();
+	console.log(`Paused on:, ${this}. Will resumed in: ${time} ms`);
+	setTimeout(() => {
+		console.log('Resumed');
+		q.resume();
+	}, time);
 }
 
-function updateRow(db, value) {
-	// Insert some data.
-	var statement = db.prepare("INSERT INTO data VALUES (?)");
-	statement.run(value);
-	statement.finalize();
+q.drain = function () {
+	saveToDb();
+	end = new Date();
+	console.log(getTime(end) + ' END');
+	console.log(((end - start) / 60000).toFixed(2) + 'min');
 }
 
-function readRows(db) {
-	// Read some data.
-	db.each("SELECT rowid AS id, name FROM data", function(err, row) {
-		console.log(row.id + ": " + row.name);
-	});
-}
+start = new Date();
+console.log(getTime(start) + ' START')
+q.push(resolve(URL, 's,Okna'));
 
-function fetchPage(url, callback) {
-	// Use request to read in pages.
-	request(url, function (error, response, body) {
-		if (error) {
-			console.log("Error requesting page: " + error);
-			return;
-		}
+function crawl(url, done) {
+	axios.get(url)
+		.then(({ data, status }) => {
+			let $ = cheerio.load(data);
 
-		callback(body);
-	});
-}
+			$('ul#companies>li.company.company-paid').each(function () {
+				let obj = {
+					1: $('h2>a', this).text(),
+					2: $('ul.list-unstyled>li.company-address>span.company-address-city', this).text() + $('ul.list-unstyled>li.company-address>span.separator', this).text() + $('ul.list-unstyled>li.company-address>span.company-address-street', this).text() + ' ' + $('ul.list-unstyled>li.company-address>span.company-address-building', this).text(),
+					3: $('ul.list-unstyled>li.company-phone>meta', this).attr('content'),
+					4: $('ul.list-unstyled>li.company-www a', this).attr('href'),
+					5: $('ul.list-unstyled>li.company-email a', this).attr('data-expanded')
+				};
+				results.push(obj);
+				//console.log(`Pages: ${pages}. Links: ${++links}.`);
+			});
 
-function run(db) {
-	// Use request to read in pages.
-	fetchPage("https://morph.io", function (body) {
-		// Use cheerio to find things in the page with css selectors.
-		var $ = cheerio.load(body);
 
-		var elements = $("div.media-body span.p-name").each(function () {
-			var value = $(this).text().trim();
-			updateRow(db, value);
+			$('#box-companies nav.text-center ul:last-child a').each(function () {
+				q.push(resolve(URL, $(this).attr('href')));
+				//console.log(`Pages: ${++pages}. Links: ${links}.`);
+			});
+
+			done();
+		})
+		.catch(err => {
+			console.log(err);
+			done(true);
 		});
-
-		readRows(db);
-
-		db.close();
-	});
 }
 
-initDatabase(run);
+function saveToDb() {
+	db = new sqlite3.Database("data.sqlite");
+	db.serialize(function () {
+		db.run("DROP TABLE IF EXISTS data");
+		db.run("CREATE TABLE data (name TEXT, address TEXT, phone TEXT, site TEXT, email TEXT)");
+		var statement = db.prepare("INSERT INTO data VALUES (?, ?, ?, ?, ?)");
+		for (let row of results) {
+			statement.run(row);
+		}
+		statement.finalize();
+	});
+	db.close();
+}
+
+function getTime(date = new Date()) {
+	let hours = date.getHours();
+	let minutes = date.getMinutes();
+	let seconds = date.getSeconds();
+	return `[${hours}:${minutes}:${seconds}]`;
+}
+
+
+
