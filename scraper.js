@@ -40,7 +40,7 @@ function crawl(url, done) {
 		.then(({ data, status }) => {
 			let $ = cheerio.load(data);
 
-			$('ul#companies>li.company.company-paid').each(function () {
+			$('ul#companies>li.company').each(function () {
 				let obj = {
 					1: $('h2>a', this).text(),
 					2: $('ul.list-unstyled>li.company-address>span.company-address-city', this).text() + $('ul.list-unstyled>li.company-address>span.separator', this).text() + $('ul.list-unstyled>li.company-address>span.company-address-street', this).text() + ' ' + $('ul.list-unstyled>li.company-address>span.company-address-building', this).text(),
@@ -50,7 +50,7 @@ function crawl(url, done) {
 				};
 				results.push(obj);
 				//++links
-				//console.log(`Pages: ${pages}. Links: ${links}.`);
+				//console.log(`Pages: ${pages}. Links: ${++links}.`);
 			});
 
 
