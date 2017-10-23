@@ -12,7 +12,7 @@ let results = [];
 let pages = links = 0;
 let start, end;
 
-let q = tress(crawl, 10);
+let q = tress(crawl, 1);
 
 q.retry = function () {
 	let time = 60000;
@@ -33,7 +33,7 @@ q.drain = function () {
 
 start = new Date();
 console.log(getTime(start) + ' START')
-q.push(resolve(URL, 's,Okna'));
+q.push(resolve(URL, 's,Druk'));
 
 function crawl(url, done) {
 	axios.get(url)
@@ -49,11 +49,13 @@ function crawl(url, done) {
 					5: $('ul.list-unstyled>li.company-email a', this).attr('data-expanded')
 				};
 				results.push(obj);
-				//console.log(`Pages: ${pages}. Links: ${++links}.`);
+				//++links
+				//console.log(`Pages: ${pages}. Links: ${links}.`);
 			});
 
 
-			$('#box-companies nav.text-center ul:last-child a').each(function () {
+			$('nav.text-center>ul.pagination>li:last-child>a').each(function () {
+				console.log($(this).attr('href'));
 				q.push(resolve(URL, $(this).attr('href')));
 				//console.log(`Pages: ${++pages}. Links: ${links}.`);
 			});
